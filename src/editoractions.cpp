@@ -2,14 +2,71 @@
 
 #include <QFileInfo>
 #include <QHash>
+#include <QSet>
 #include <QString>
 #include <QVariant>
 #include <QWidget>
+#include <QApplication>
+#include <QEventLoop>
+#include <QTabWidget>
 #include <qsciscintilla.h>
 
 namespace
 {
 const int kMaxApplyChars = 30 * 1024 * 1024;
+
+QTabWidget *findTabWidget(QsciScintilla *editor)
+{
+    QWidget *parent = editor != nullptr ? editor->parentWidget() : nullptr;
+    while (parent != nullptr)
+    {
+        QTabWidget *tabWidget = qobject_cast<QTabWidget *>(parent);
+        if (tabWidget != nullptr)
+        {
+            return tabWidget;
+        }
+        parent = parent->parentWidget();
+    }
+    return nullptr;
+}
+}
+
+bool EditorActions::ensureLoaded(QsciScintilla *editor)
+{
+    if (editor == nullptr)
+    {
+        return false;
+    }
+    if (!editor->text().isEmpty())
+    {
+        return true;
+    }
+
+    QTabWidget *tabWidget = findTabWidget(editor);
+    if (tabWidget == nullptr)
+    {
+        return false;
+    }
+    const int index = tabWidget->indexOf(editor);
+    if (index < 0)
+    {
+        return false;
+    }
+
+    const int originalIndex = tabWidget->currentIndex();
+    if (originalIndex != index)
+    {
+        tabWidget->setCurrentIndex(index);
+    }
+    for (int wait = 0; wait < 40 && editor->text().isEmpty(); ++wait)
+    {
+        QApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
+    if (originalIndex >= 0 && originalIndex != index && originalIndex < tabWidget->count())
+    {
+        tabWidget->setCurrentIndex(originalIndex);
+    }
+    return !editor->text().isEmpty();
 }
 
 EditorActions::Result EditorActions::apply(QsciScintilla *editor,
@@ -106,24 +163,30 @@ EditorActions::Result EditorActions::apply(QsciScintilla *editor,
     return result;
 }
 
-QVector<QsciScintilla *> EditorActions::collectOpenEditors(QWidget *mainWindow)
+QVector<QsciScintilla *> EditorActions::collectOpenEditors()
 {
     QVector<QsciScintilla *> editors;
-    if (mainWindow == nullptr)
+    QSet<QsciScintilla *> seen;
+    const QWidgetList topLevels = QApplication::topLevelWidgets();
+    for (QWidget *topLevel : topLevels)
     {
-        return editors;
-    }
-
-    const QList<QsciScintilla *> children = mainWindow->findChildren<QsciScintilla *>();
-    for (QsciScintilla *editor : children)
-    {
-        if (editor == nullptr)
+        const QList<QTabWidget *> tabWidgets = topLevel->findChildren<QTabWidget *>();
+        for (QTabWidget *tabWidget : tabWidgets)
         {
-            continue;
-        }
-        if (editor->property("filePath").isValid() || editor->property("newfile").isValid())
-        {
-            editors.append(editor);
+            for (int index = 0; index < tabWidget->count(); ++index)
+            {
+                QWidget *page = tabWidget->widget(index);
+                QsciScintilla *editor = qobject_cast<QsciScintilla *>(page);
+                if (editor == nullptr || seen.contains(editor))
+                {
+                    continue;
+                }
+                if (editor->property("filePath").isValid() || editor->property("newfile").isValid())
+                {
+                    seen.insert(editor);
+                    editors.append(editor);
+                }
+            }
         }
     }
     return editors;

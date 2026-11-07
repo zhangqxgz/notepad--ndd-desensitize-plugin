@@ -8,9 +8,9 @@
 - 目录：`C:\dev\code\ndd_plugins\desensitive_processor`（WSL：`/mnt/c/dev/code/ndd_plugins/desensitive_processor`）
 - GitHub（公开，GPL-3.0）：https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin
 - 用途：Notepad--（NDD）插件，按关键词映射表对当前文档一键脱敏/还原
-- 当前版本：v1.1（2026-11-07）
-- 功能：映射表脱敏/还原、随机替换串、批量粘贴、导入导出、大小写/选区开关、Ctrl+Z 撤销、配置持久化、全局快捷键（Ctrl+Alt+D/R，可自定义）、全部打开文件批量处理
-- 发布包：`dist\desensitive_processor-v1.1.zip`
+- 当前版本：v1.2（2026-11-07）
+- 功能：映射表脱敏/还原、随机替换串、批量粘贴、导入导出、大小写/选区开关、Ctrl+Z 撤销、配置持久化、全局快捷键（Ctrl+Alt+D/R，可自定义）、全部打开文件批量处理（自动加载 NDD 懒加载标签页）
+- 发布包：`dist\desensitive_processor-v1.2.zip`
 
 ## 关键环境（本机已装好）
 

@@ -2,7 +2,7 @@
 chcp 65001 >nul
 setlocal
 set HERE=%~dp0
-set NAME=desensitive_processor-v1.1
+set NAME=desensitive_processor-v1.2
 set DIST=%HERE%dist\%NAME%
 
 if not exist "%HERE%build\out\desensitive_processor.dll" (

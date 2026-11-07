@@ -26,7 +26,8 @@ Result apply(QsciScintilla *editor,
              bool reverse,
              bool selectionOnly);
 
-QVector<QsciScintilla *> collectOpenEditors(QWidget *mainWindow);
+bool ensureLoaded(QsciScintilla *editor);
+QVector<QsciScintilla *> collectOpenEditors();
 QString editorLabel(QsciScintilla *editor);
 QString editorPath(QsciScintilla *editor);
 }

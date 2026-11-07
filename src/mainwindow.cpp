@@ -650,7 +650,15 @@ void MainWindow::applyToOpenDocuments(bool reverse)
         }
     }
 
-    const QVector<QsciScintilla *> editors = EditorActions::collectOpenEditors(s_pMainNotepad);
+    const QVector<QsciScintilla *> editors = EditorActions::collectOpenEditors();
+    logDebug(QStringLiteral("[全部%1] 枚举到 %2 个标签页").arg(actionName).arg(editors.size()));
+    for (QsciScintilla *editor : editors)
+    {
+        logDebug(QStringLiteral("[全部%1] %2 | path=%3 | len=%4 | readonly=%5")
+                     .arg(actionName, EditorActions::editorLabel(editor), EditorActions::editorPath(editor))
+                     .arg(editor->text().size())
+                     .arg(editor->isReadOnly()));
+    }
     if (editors.isEmpty())
     {
         QMessageBox::information(this, QStringLiteral("脱敏处理器"), QStringLiteral("当前没有打开的文档。"));
@@ -683,6 +691,7 @@ void MainWindow::applyToOpenDocuments(bool reverse)
     const QMessageBox::StandardButton answer = QMessageBox::question(
         this, QStringLiteral("全部打开文件%1").arg(actionName),
         QStringLiteral("将对当前打开的 %1 个文档执行%2（含未保存内容，可处理的文档 %3 个）：\n\n%4\n\n"
+                       "NDD 恢复的懒加载标签页会自动加载后再处理。\n"
                        "每个文档切换过去后可按 Ctrl+Z 撤销；未保存的修改需要手动保存。\n\n是否继续？")
             .arg(editors.size())
             .arg(actionName)
@@ -708,6 +717,16 @@ void MainWindow::applyToOpenDocuments(bool reverse)
         if (editor->isReadOnly())
         {
             ++readOnlyCount;
+            continue;
+        }
+
+        if (editor->text().isEmpty())
+        {
+            EditorActions::ensureLoaded(editor);
+        }
+        if (editor->text().isEmpty())
+        {
+            ++emptyCount;
             continue;
         }
 

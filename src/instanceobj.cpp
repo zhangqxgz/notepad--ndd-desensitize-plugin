@@ -10,6 +10,7 @@
 #include <QKeySequence>
 #include <QMessageBox>
 #include <QShortcut>
+#include <QTimer>
 #include <QToolTip>
 #include <qsciscintilla.h>
 

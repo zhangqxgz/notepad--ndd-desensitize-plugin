@@ -11,7 +11,7 @@ keyword mapping table.
 
 ## Download
 
-- Installer (recommended): [GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) — download `desensitive_processor-v1.1.zip`
+- Installer (recommended): [GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) — download `desensitive_processor-v1.2.zip`
 - Source: `git clone https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin.git`
 
 ## Features
@@ -30,7 +30,8 @@ keyword mapping table.
 - Global hotkeys: `Ctrl+Alt+D` desensitize / `Ctrl+Alt+R` restore (customizable in
   the plugin window; applies to the current document only, with a non-intrusive toast)
 - All open documents: one click to desensitize/restore every open tab
-  (each document can be undone separately with Ctrl+Z)
+  (lazy-restored NDD tabs are loaded automatically first; each document can be
+  undone separately with Ctrl+Z)
 - Mappings are saved automatically to `%APPDATA%\ndd-desensitive\mappings.json`
 
 ## Usage
