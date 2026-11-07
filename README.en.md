@@ -11,7 +11,7 @@ keyword mapping table.
 
 ## Download
 
-- Installer (recommended): [GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) — download `desensitive_processor-v1.0.zip`
+- Installer (recommended): [GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) — download `desensitive_processor-v1.1.zip`
 - Source: `git clone https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin.git`
 
 ## Features
@@ -27,6 +27,10 @@ keyword mapping table.
 - Batch paste: `abc->aldjfakldfj`, `abc,xxx`, `abc<Tab>xxx`, etc.
 - Import/export: JSON, CSV, plain text
 - Ctrl+Z undoes the whole operation in a single step
+- Global hotkeys: `Ctrl+Alt+D` desensitize / `Ctrl+Alt+R` restore (customizable in
+  the plugin window; applies to the current document only, with a non-intrusive toast)
+- All open documents: one click to desensitize/restore every open tab
+  (each document can be undone separately with Ctrl+Z)
 - Mappings are saved automatically to `%APPDATA%\ndd-desensitive\mappings.json`
 
 ## Usage

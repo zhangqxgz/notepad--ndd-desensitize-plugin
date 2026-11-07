@@ -1,10 +1,12 @@
 #include "mainwindow.h"
+#include "editoractions.h"
+#include "logutil.h"
 #include "mappingstore.h"
+#include "settingsstore.h"
 
 #include <QAbstractItemView>
 #include <QCheckBox>
 #include <QCloseEvent>
-#include <QDateTime>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -14,6 +16,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeySequenceEdit>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPlainTextEdit>
@@ -21,7 +24,6 @@
 #include <QRandomGenerator>
 #include <QSet>
 #include <QTableWidget>
-#include <QTextStream>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <qsciscintilla.h>
@@ -34,21 +36,13 @@ extern std::function<QsciScintilla *(QWidget *)> s_getCurEdit;
 
 namespace
 {
-const int kMaxApplyChars = 30 * 1024 * 1024;
-
-void logDebug(const QString &message)
+QString sequenceToText(const QKeySequence &sequence)
 {
-    const QString configPath = MappingStore::configFilePath();
-    const QString logPath = QFileInfo(configPath).absolutePath() + QStringLiteral("/plugin.log");
-    QDir().mkpath(QFileInfo(logPath).absolutePath());
-    QFile file(logPath);
-    if (!file.open(QIODevice::Append | QIODevice::Text))
+    if (sequence.isEmpty())
     {
-        return;
+        return QString();
     }
-    QTextStream stream(&file);
-    stream << QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")) << QLatin1Char(' ')
-           << message << Qt::endl;
+    return QKeySequence(sequence[0]).toString(QKeySequence::PortableText);
 }
 
 QString randomToken(int length)
@@ -157,12 +151,37 @@ MainWindow::MainWindow(QWidget *parent)
     connect(configDirButton, &QPushButton::clicked, this, &MainWindow::openConfigDir);
     rootLayout->addLayout(optionLayout);
 
+    QHBoxLayout *shortcutLayout = new QHBoxLayout();
+    QLabel *hotkeyLabel = new QLabel(QStringLiteral("快捷键：脱敏"), this);
+    m_hotkeyForward = new QKeySequenceEdit(this);
+    QLabel *hotkeyRestoreLabel = new QLabel(QStringLiteral("还原"), this);
+    m_hotkeyReverse = new QKeySequenceEdit(this);
+    QPushButton *resetShortcutButton = new QPushButton(QStringLiteral("恢复默认"), this);
+    m_silent = new QCheckBox(QStringLiteral("静默提示"), this);
+    shortcutLayout->addWidget(hotkeyLabel);
+    shortcutLayout->addWidget(m_hotkeyForward);
+    shortcutLayout->addWidget(hotkeyRestoreLabel);
+    shortcutLayout->addWidget(m_hotkeyReverse);
+    shortcutLayout->addWidget(resetShortcutButton);
+    shortcutLayout->addWidget(m_silent);
+    shortcutLayout->addStretch();
+    rootLayout->addLayout(shortcutLayout);
+
+    connect(m_hotkeyForward, &QKeySequenceEdit::keySequenceChanged, this, &MainWindow::saveSettingsFromUi);
+    connect(m_hotkeyReverse, &QKeySequenceEdit::keySequenceChanged, this, &MainWindow::saveSettingsFromUi);
+    connect(m_silent, &QCheckBox::toggled, this, &MainWindow::saveSettingsFromUi);
+    connect(resetShortcutButton, &QPushButton::clicked, this, &MainWindow::resetShortcuts);
+
     QHBoxLayout *actionLayout = new QHBoxLayout();
     QPushButton *forwardButton = new QPushButton(QStringLiteral("脱敏"), this);
     QPushButton *reverseButton = new QPushButton(QStringLiteral("还原"), this);
+    QPushButton *allForwardButton = new QPushButton(QStringLiteral("全部打开文件脱敏"), this);
+    QPushButton *allReverseButton = new QPushButton(QStringLiteral("全部打开文件还原"), this);
     QPushButton *saveButton = new QPushButton(QStringLiteral("保存配置"), this);
     actionLayout->addWidget(forwardButton);
     actionLayout->addWidget(reverseButton);
+    actionLayout->addWidget(allForwardButton);
+    actionLayout->addWidget(allReverseButton);
     actionLayout->addWidget(saveButton);
     m_status = new QLabel(this);
     actionLayout->addWidget(m_status, 1);
@@ -170,14 +189,19 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(forwardButton, &QPushButton::clicked, this, &MainWindow::applyForward);
     connect(reverseButton, &QPushButton::clicked, this, &MainWindow::applyReverse);
+    connect(allForwardButton, &QPushButton::clicked, this, &MainWindow::applyAllForward);
+    connect(allReverseButton, &QPushButton::clicked, this, &MainWindow::applyAllReverse);
     connect(saveButton, &QPushButton::clicked, this, &MainWindow::saveConfig);
-    connect(m_caseSensitive, &QCheckBox::toggled, this, &MainWindow::markAsChanged);
+    connect(m_caseSensitive, &QCheckBox::toggled, this, &MainWindow::saveSettingsFromUi);
+    connect(m_selectedOnly, &QCheckBox::toggled, this, &MainWindow::saveSettingsFromUi);
 
-    QLabel *hint = new QLabel(QStringLiteral("提示：启用的行才会参与替换；配置自动保存到 %1")
+    QLabel *hint = new QLabel(QStringLiteral("提示：快捷键作用于当前文件；「全部打开文件」会处理所有已打开标签页（各自可用 Ctrl+Z 撤销）。配置自动保存到 %1")
                                   .arg(MappingStore::configFilePath()),
                               this);
     hint->setWordWrap(true);
     rootLayout->addWidget(hint);
+
+    loadSettingsToUi();
 
     QString error;
     const QVector<Mapping> mappings = MappingStore::load(&error);
@@ -551,124 +575,252 @@ void MainWindow::applyText(bool reverse)
     QsciScintilla *editor = s_getCurEdit(s_pMainNotepad);
     logDebug(QStringLiteral("[%1] mappings=%2 editor=%3").arg(actionName).arg(mappings.size())
                  .arg(reinterpret_cast<quintptr>(editor), 0, 16));
-    if (editor == nullptr)
-    {
-        QMessageBox::information(this, QStringLiteral("脱敏处理器"), QStringLiteral("当前没有打开的文本编辑器。"));
-        return;
-    }
-    if (editor->isReadOnly())
-    {
-        logDebug(QStringLiteral("[%1] editor readonly").arg(actionName));
-        QMessageBox::warning(this, QStringLiteral("脱敏处理器"),
-                             QStringLiteral("当前文档是只读模式（大文件快速模式或只读打开），无法执行替换。"));
-        return;
-    }
 
-    const bool selectionOnly = m_selectedOnly->isChecked() && editor->hasSelectedText();
-    QString docBefore;
-    QString source;
-    if (selectionOnly)
-    {
-        docBefore = editor->text();
-        source = editor->selectedText();
-    }
-    else
-    {
-        source = editor->text();
-        docBefore = source;
-    }
-    logDebug(QStringLiteral("[%1] selectionOnly=%2 sourceLen=%3")
-                 .arg(actionName)
-                 .arg(selectionOnly)
-                 .arg(source.size()));
-    if (source.isEmpty())
-    {
-        setStatus(QStringLiteral("当前文档为空，未做修改。"));
-        QMessageBox::information(this, QStringLiteral("脱敏处理器"), QStringLiteral("当前文档为空，未做修改。"));
-        return;
-    }
-    if (source.size() > kMaxApplyChars)
-    {
-        QMessageBox::warning(this, QStringLiteral("脱敏处理器"),
-                             QStringLiteral("文本过大（超过 30M 字符），请先切换到普通模式或缩小处理范围。"));
-        return;
-    }
+    const EditorActions::Result result =
+        EditorActions::apply(editor, mappings, caseSensitive, reverse, m_selectedOnly->isChecked());
 
-    QHash<int, int> hitCounts;
-    int totalHits = 0;
-    const QString result = Desensitizer::apply(source, mappings, caseSensitive, reverse, &hitCounts, &totalHits);
-    logDebug(QStringLiteral("[%1] totalHits=%2 changed=%3").arg(actionName).arg(totalHits).arg(result != source));
-    if (result == source)
+    if (!result.ok)
     {
-        const QString tip = reverse
-                                ? QStringLiteral("未发现可还原的内容。\n\n已启用 %1 条映射，请检查：\n1) 映射行是否勾选启用\n2) 原文是否与文档一致\n3) 区分大小写开关是否合适")
-                                      .arg(mappings.size())
-                                : QStringLiteral("未发现可脱敏的内容。\n\n已启用 %1 条映射，请检查：\n1) 映射行是否勾选启用\n2) 原文是否与文档一致\n3) 区分大小写开关是否合适")
-                                      .arg(mappings.size());
-        setStatus(reverse ? QStringLiteral("未发现可还原的内容。") : QStringLiteral("未发现可脱敏的内容。"));
-        QMessageBox::information(this, QStringLiteral("脱敏处理器"), tip);
-        return;
-    }
-
-    const QByteArray utf8 = result.toUtf8();
-    logDebug(QStringLiteral("[%1] resultLen=%2 codepage=%3")
-                 .arg(actionName)
-                 .arg(result.size())
-                 .arg(editor->SendScintilla(static_cast<unsigned int>(QsciScintillaBase::SCI_GETCODEPAGE))));
-
-    editor->beginUndoAction();
-    if (!selectionOnly)
-    {
-        editor->SendScintilla(static_cast<unsigned int>(QsciScintillaBase::SCI_SELECTALL));
-    }
-    editor->SendScintilla(static_cast<unsigned int>(QsciScintillaBase::SCI_REPLACESEL), utf8.constData());
-    editor->endUndoAction();
-
-    bool writeOk = editor->text() != docBefore;
-    if (!writeOk)
-    {
-        logDebug(QStringLiteral("[%1] SCI_REPLACESEL had no effect, fallback to setText").arg(actionName));
-        const QString fullResult = selectionOnly
-                                       ? Desensitizer::apply(docBefore, mappings, caseSensitive, reverse)
-                                       : result;
-        editor->setText(fullResult);
-        writeOk = editor->text() != docBefore;
-    }
-
-    logDebug(QStringLiteral("[%1] after-write ok=%2 modified=%3 textLen=%4")
-                 .arg(actionName)
-                 .arg(writeOk)
-                 .arg(editor->isModified())
-                 .arg(editor->text().size()));
-
-    int hitKeys = 0;
-    for (int count : hitCounts)
-    {
-        if (count > 0)
+        if (result.noMatch)
         {
-            ++hitKeys;
+            const QString tip =
+                reverse
+                    ? QStringLiteral("未发现可还原的内容。\n\n已启用 %1 条映射，请检查：\n1) 映射行是否勾选启用\n2) 原文是否与文档一致\n3) 区分大小写开关是否合适")
+                          .arg(mappings.size())
+                    : QStringLiteral("未发现可脱敏的内容。\n\n已启用 %1 条映射，请检查：\n1) 映射行是否勾选启用\n2) 原文是否与文档一致\n3) 区分大小写开关是否合适")
+                          .arg(mappings.size());
+            setStatus(result.error);
+            logDebug(QStringLiteral("[%1] no match").arg(actionName));
+            QMessageBox::information(this, QStringLiteral("脱敏处理器"), tip);
+        }
+        else
+        {
+            setStatus(result.error);
+            logDebug(QStringLiteral("[%1] failed: %2").arg(actionName, result.error));
+            QMessageBox::warning(this, QStringLiteral("脱敏处理器"), result.error);
+        }
+        return;
+    }
+
+    const QString summary = QStringLiteral("%1完成：共替换 %2 处，命中 %3 个关键词（可 Ctrl+Z 撤销）")
+                                .arg(actionName)
+                                .arg(result.totalHits)
+                                .arg(result.hitKeys);
+    logDebug(QStringLiteral("[%1] done: %2").arg(actionName, summary));
+    setStatus(summary);
+    QMessageBox::information(this, QStringLiteral("脱敏处理器"), summary);
+}
+
+void MainWindow::applyAllForward()
+{
+    applyToOpenDocuments(false);
+}
+
+void MainWindow::applyAllReverse()
+{
+    applyToOpenDocuments(true);
+}
+
+void MainWindow::applyToOpenDocuments(bool reverse)
+{
+    const QString actionName = reverse ? QStringLiteral("还原") : QStringLiteral("脱敏");
+    const QVector<Mapping> mappings = collectMappings();
+    if (mappings.isEmpty())
+    {
+        QMessageBox::information(this, QStringLiteral("脱敏处理器"), QStringLiteral("映射列表为空，请先添加映射。"));
+        return;
+    }
+
+    const bool caseSensitive = m_caseSensitive->isChecked();
+    const ValidationResult validation = Desensitizer::validate(mappings, caseSensitive);
+    if (!validation.errors.isEmpty())
+    {
+        QMessageBox::critical(this, QStringLiteral("映射配置有误"), validation.errors.join(QLatin1Char('\n')));
+        return;
+    }
+    if (!validation.warnings.isEmpty())
+    {
+        const QMessageBox::StandardButton answer = QMessageBox::question(
+            this, QStringLiteral("映射配置提醒"),
+            validation.warnings.join(QLatin1Char('\n')) + QStringLiteral("\n\n是否继续？"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer != QMessageBox::Yes)
+        {
+            return;
         }
     }
 
-    QString summary = QStringLiteral("%1完成：共替换 %2 处，命中 %3 个关键词（可 Ctrl+Z 撤销）")
-                          .arg(actionName)
-                          .arg(totalHits)
-                          .arg(hitKeys);
-    if (!writeOk)
+    const QVector<QsciScintilla *> editors = EditorActions::collectOpenEditors(s_pMainNotepad);
+    if (editors.isEmpty())
     {
-        summary.prepend(QStringLiteral("【写入编辑器失败】"));
+        QMessageBox::information(this, QStringLiteral("脱敏处理器"), QStringLiteral("当前没有打开的文档。"));
+        return;
     }
-    logDebug(QStringLiteral("[%1] done: writeOk=%2 %3").arg(actionName).arg(writeOk).arg(summary));
-    setStatus(summary);
-    if (writeOk)
+
+    QStringList labels;
+    int readableCount = 0;
+    for (QsciScintilla *editor : editors)
     {
-        QMessageBox::information(this, QStringLiteral("脱敏处理器"), summary);
+        QString label = EditorActions::editorLabel(editor);
+        if (editor->isReadOnly())
+        {
+            label += QStringLiteral("（只读）");
+        }
+        else
+        {
+            ++readableCount;
+        }
+        labels << label;
+    }
+
+    const int previewCount = qMin(labels.size(), 20);
+    QStringList preview = labels.mid(0, previewCount);
+    if (labels.size() > previewCount)
+    {
+        preview << QStringLiteral("…… 另有 %1 个文档").arg(labels.size() - previewCount);
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this, QStringLiteral("全部打开文件%1").arg(actionName),
+        QStringLiteral("将对当前打开的 %1 个文档执行%2（含未保存内容，可处理的文档 %3 个）：\n\n%4\n\n"
+                       "每个文档切换过去后可按 Ctrl+Z 撤销；未保存的修改需要手动保存。\n\n是否继续？")
+            .arg(editors.size())
+            .arg(actionName)
+            .arg(readableCount)
+            .arg(preview.join(QLatin1Char('\n'))),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    int changedCount = 0;
+    int noMatchCount = 0;
+    int readOnlyCount = 0;
+    int emptyCount = 0;
+    int failedCount = 0;
+    int totalHits = 0;
+    QStringList failedDetails;
+
+    for (QsciScintilla *editor : editors)
+    {
+        const QString label = EditorActions::editorLabel(editor);
+        if (editor->isReadOnly())
+        {
+            ++readOnlyCount;
+            continue;
+        }
+
+        const EditorActions::Result result =
+            EditorActions::apply(editor, mappings, caseSensitive, reverse, false);
+        if (result.ok)
+        {
+            ++changedCount;
+            totalHits += result.totalHits;
+        }
+        else if (result.emptyDocument)
+        {
+            ++emptyCount;
+        }
+        else if (result.noMatch)
+        {
+            ++noMatchCount;
+        }
+        else
+        {
+            ++failedCount;
+            failedDetails << QStringLiteral("%1：%2").arg(label, result.error);
+        }
+    }
+
+    QStringList lines;
+    lines << QStringLiteral("%1完成：处理 %2 个文档，共替换 %3 处")
+                 .arg(actionName)
+                 .arg(changedCount)
+                 .arg(totalHits);
+    if (noMatchCount > 0)
+    {
+        lines << QStringLiteral("无命中：%1 个").arg(noMatchCount);
+    }
+    if (readOnlyCount > 0)
+    {
+        lines << QStringLiteral("只读跳过：%1 个").arg(readOnlyCount);
+    }
+    if (emptyCount > 0)
+    {
+        lines << QStringLiteral("空文档跳过：%1 个").arg(emptyCount);
+    }
+    if (failedCount > 0)
+    {
+        lines << QStringLiteral("失败：%1 个").arg(failedCount);
+        lines << failedDetails.mid(0, 10).join(QLatin1Char('\n'));
+    }
+    lines << QStringLiteral("未保存的文档请手动保存；每个文档可用 Ctrl+Z 撤销。");
+
+    const QString summary = lines.join(QLatin1Char('\n'));
+    logDebug(QStringLiteral("[全部%1] %2").arg(actionName, summary));
+    setStatus(QStringLiteral("全部%1：处理 %2 个文档，替换 %3 处").arg(actionName).arg(changedCount).arg(totalHits));
+
+    if (failedCount > 0)
+    {
+        QMessageBox::warning(this, QStringLiteral("全部打开文件%1").arg(actionName), summary);
     }
     else
     {
-        QMessageBox::warning(this, QStringLiteral("脱敏处理器"),
-                             summary + QStringLiteral("\n\n请把日志文件发给开发者：\n%1")
-                                           .arg(QFileInfo(MappingStore::configFilePath()).absolutePath()
-                                                + QStringLiteral("/plugin.log")));
+        QMessageBox::information(this, QStringLiteral("全部打开文件%1").arg(actionName), summary);
     }
 }
+
+void MainWindow::resetShortcuts()
+{
+    m_loadingSettings = true;
+    m_hotkeyForward->setKeySequence(QKeySequence(QStringLiteral("Ctrl+Alt+D")));
+    m_hotkeyReverse->setKeySequence(QKeySequence(QStringLiteral("Ctrl+Alt+R")));
+    m_loadingSettings = false;
+    saveSettingsFromUi();
+}
+
+void MainWindow::loadSettingsToUi()
+{
+    m_loadingSettings = true;
+    m_settings = SettingsStore::load();
+    m_caseSensitive->setChecked(m_settings.caseSensitive);
+    m_selectedOnly->setChecked(m_settings.selectionOnly);
+    m_silent->setChecked(m_settings.silent);
+    m_hotkeyForward->setKeySequence(QKeySequence(m_settings.hotkeyDesensitize));
+    m_hotkeyReverse->setKeySequence(QKeySequence(m_settings.hotkeyRestore));
+    m_loadingSettings = false;
+}
+
+void MainWindow::saveSettingsFromUi()
+{
+    if (m_loadingSettings)
+    {
+        return;
+    }
+
+    AppSettings settings;
+    settings.hotkeyDesensitize = sequenceToText(m_hotkeyForward->keySequence());
+    settings.hotkeyRestore = sequenceToText(m_hotkeyReverse->keySequence());
+    settings.caseSensitive = m_caseSensitive->isChecked();
+    settings.selectionOnly = m_selectedOnly->isChecked();
+    settings.silent = m_silent->isChecked();
+
+    if (!settings.hotkeyDesensitize.isEmpty() && settings.hotkeyDesensitize == settings.hotkeyRestore)
+    {
+        QMessageBox::warning(this, QStringLiteral("快捷键冲突"),
+                             QStringLiteral("脱敏和还原不能使用同一个快捷键，已恢复为上一次的设置。"));
+        loadSettingsToUi();
+        return;
+    }
+
+    m_settings = settings;
+    QString error;
+    if (!SettingsStore::save(settings, &error))
+    {
+        setStatus(error);
+        return;
+    }
+    emit shortcutsChanged();
+}
+

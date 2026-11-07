@@ -53,7 +53,7 @@ bool NDD_PROC_IDENTIFY(NDD_PROC_DATA *pProcData)
     }
     pProcData->m_strPlugName = QObject::tr("脱敏处理器");
     pProcData->m_strComment = QObject::tr("关键词映射脱敏与还原工具");
-    pProcData->m_version = QStringLiteral("v1.0");
+    pProcData->m_version = QStringLiteral("v1.1");
     pProcData->m_auther = QStringLiteral("qx");
     pProcData->m_menuType = 0;
     return true;

@@ -8,14 +8,20 @@ DESTDIR = $$PWD/build/out
 
 HEADERS += \
     src/desensitizer.h \
+    src/editoractions.h \
+    src/logutil.h \
     src/mappingstore.h \
     src/mainwindow.h \
+    src/settingsstore.h \
     src/instanceobj.h
 
 SOURCES += \
     src/desensitizer.cpp \
+    src/editoractions.cpp \
+    src/logutil.cpp \
     src/mappingstore.cpp \
     src/mainwindow.cpp \
+    src/settingsstore.cpp \
     src/instanceobj.cpp \
     src/plugin_export.cpp
 

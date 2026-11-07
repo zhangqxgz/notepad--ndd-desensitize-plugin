@@ -3,8 +3,10 @@
 #include <QWidget>
 #include <QVector>
 #include "desensitizer.h"
+#include "settingsstore.h"
 
 class QCheckBox;
+class QKeySequenceEdit;
 class QLabel;
 class QTableWidget;
 class QTableWidgetItem;
@@ -16,6 +18,9 @@ class MainWindow : public QWidget
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
+
+signals:
+    void shortcutsChanged();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -32,21 +37,32 @@ private slots:
     void saveConfig();
     void applyForward();
     void applyReverse();
+    void applyAllForward();
+    void applyAllReverse();
+    void resetShortcuts();
+    void saveSettingsFromUi();
     void onItemChanged(QTableWidgetItem *item);
     void openConfigDir();
 
 private:
     void applyText(bool reverse);
+    void applyToOpenDocuments(bool reverse);
     QVector<Mapping> collectMappings() const;
     void setMappings(const QVector<Mapping> &mappings, bool append);
     void appendMappings(const QVector<Mapping> &mappings);
     void appendRow(const Mapping &mapping);
     void markAsChanged();
     void setStatus(const QString &text);
+    void loadSettingsToUi();
 
     QTableWidget *m_table = nullptr;
     QCheckBox *m_caseSensitive = nullptr;
     QCheckBox *m_selectedOnly = nullptr;
+    QCheckBox *m_silent = nullptr;
+    QKeySequenceEdit *m_hotkeyForward = nullptr;
+    QKeySequenceEdit *m_hotkeyReverse = nullptr;
     QLabel *m_status = nullptr;
+    AppSettings m_settings;
     bool m_loading = false;
+    bool m_loadingSettings = false;
 };

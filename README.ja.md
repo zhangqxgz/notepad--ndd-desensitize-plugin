@@ -11,7 +11,7 @@
 
 ## ダウンロード
 
-- インストーラー（推奨）：[GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) から `desensitive_processor-v1.0.zip` をダウンロード
+- インストーラー（推奨）：[GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) から `desensitive_processor-v1.1.zip` をダウンロード
 - ソースコード：`git clone https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin.git`
 
 ## 機能
@@ -27,6 +27,10 @@
 - 一括貼り付け：`abc->aldjfakldfj`、`abc,xxx`、`abc<Tab>xxx` などの形式に対応
 - インポート／エクスポート：JSON、CSV、テキスト
 - Ctrl+Z で操作全体を 1 ステップで元に戻せる
+- グローバルホットキー：`Ctrl+Alt+D` マスキング / `Ctrl+Alt+R` 復元
+  （プラグイン画面で変更可能。現在のドキュメントのみに作用し、控えめなトーストで通知）
+- 開いているすべてのドキュメント：開いている全タブを一括マスキング／復元
+  （各ドキュメントは個別に Ctrl+Z で元に戻せる）
 - マッピング設定は `%APPDATA%\ndd-desensitive\mappings.json` に自動保存
 
 ## 使い方

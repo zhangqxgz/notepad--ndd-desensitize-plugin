@@ -10,7 +10,7 @@ A keyword-mapping desensitize & restore plugin for **Notepad--** (aka **NDD**).
 
 ## 下载
 
-- 安装包（推荐）：[GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) 下载 `desensitive_processor-v1.0.zip`
+- 安装包（推荐）：[GitHub Releases](https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin/releases) 下载 `desensitive_processor-v1.1.zip`
 - 源码：`git clone https://github.com/zhangqxgz/notepad--ndd-desensitize-plugin.git`
 
 ## 功能
@@ -25,6 +25,8 @@ A keyword-mapping desensitize & restore plugin for **Notepad--** (aka **NDD**).
 - 批量粘贴：`abc->aldjfakldfj`、`abc,xxx`、`abc<Tab>xxx` 等格式
 - 导入/导出：JSON、CSV、文本
 - 支持 Ctrl+Z 一步撤销本次操作
+- 全局快捷键：`Ctrl+Alt+D` 脱敏 / `Ctrl+Alt+R` 还原（可在插件窗口自定义，只作用于当前文件，不弹窗干扰）
+- 全部打开文件：一键对当前所有打开的标签页执行脱敏/还原（每个文档可单独 Ctrl+Z）
 - 映射配置自动保存到 `%APPDATA%\ndd-desensitive\mappings.json`
 
 ## 使用

@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QWidget>
 
+class QShortcut;
 class MainWindow;
 
 class InstanceObj : public QObject
@@ -14,10 +15,18 @@ public:
 
 public slots:
     void doMainWork();
+    void quickDesensitize();
+    void quickRestore();
+    void reloadShortcuts();
 
-public:
+private:
+    void quickApply(bool reverse);
+    void createShortcut(QShortcut *&target, const QString &sequence, bool reverse);
+
     QWidget *m_pNotepad = nullptr;
     QPointer<MainWindow> m_pMainWindow;
+    QShortcut *m_hotkeyForward = nullptr;
+    QShortcut *m_hotkeyReverse = nullptr;
 
 private:
     InstanceObj(const InstanceObj &other) = delete;
